@@ -1,8 +1,8 @@
 /*  -*-  mode: c; tab-width: 4; indent-tabs-mode: t; c-basic-offset: 4; coding: utf-8  -*-  */
 /************************************************************************************
  **                                                                                 **
- **                                        UHSDR                                    **
- **               a powerful firmware for STM32 based SDR transceivers              **
+ **                               mcHF QRP Transceiver                              **
+ **                             K Atanassov - M0NKA 2014                            **
  **                                                                                 **
  **---------------------------------------------------------------------------------**
  **                                                                                 **
@@ -21,12 +21,9 @@
 #include <math.h>
 #include <src/uhsdr_version.h>
 #include "hardware/uhsdr_board_config.h"
-#include "ui_lcd_items.h"
 #include "ui_menu.h"
 #include "uhsdr_rtc.h"
 #include "adc.h"
-#include "drivers/ui/oscillator/osc_si5351a.h"
-#include "audio_nr.h"
 //
 //
 #include "ui.h"
@@ -59,11 +56,241 @@
 #include "cw_decoder.h"
 #include "psk.h"
 
+// POSITIONS START
 #define SPLIT_ACTIVE_COLOUR         		Yellow      // colour of "SPLIT" indicator when active
 #define SPLIT_INACTIVE_COLOUR           	Grey        // colour of "SPLIT" indicator when NOT active
 #define COL_PWR_IND                 		White
 
+// Frequency display control
+#define POS_TUNE_FREQ_X             		116
+#define POS_TUNE_FREQ_Y             		100
 
+#define POS_TUNE_SPLIT_FREQ_X           	POS_TUNE_FREQ_X+80//Shift with a small split to the right to close the frequency digits.
+#define POS_TUNE_SPLIT_MARKER_X         	POS_TUNE_FREQ_X+40
+#define POS_TUNE_SPLIT_FREQ_Y_TX        	POS_TUNE_FREQ_Y+12
+
+// Second frequency display control
+#define POS_TUNE_SFREQ_X            		(POS_TUNE_FREQ_X + 120)
+#define POS_TUNE_SFREQ_Y            		(POS_TUNE_FREQ_Y - 20)
+
+// Band selection control
+#define POS_BAND_MODE_X             		(POS_TUNE_FREQ_X + 160)
+#define POS_BAND_MODE_Y             		(POS_TUNE_FREQ_Y + 7)
+#define POS_BAND_MODE_MASK_X            	(POS_BAND_MODE_X - 1)
+#define POS_BAND_MODE_MASK_Y            	(POS_BAND_MODE_Y - 1)
+#define POS_BAND_MODE_MASK_H            	13
+#define POS_BAND_MODE_MASK_W            	33
+
+// Demodulator mode control
+#define POS_DEMOD_MODE_X            		(POS_TUNE_FREQ_X + 1)
+#define POS_DEMOD_MODE_Y            		(POS_TUNE_FREQ_Y - 20)
+#define POS_DEMOD_MODE_MASK_X           	(POS_DEMOD_MODE_X - 1)
+#define POS_DEMOD_MODE_MASK_Y           	(POS_DEMOD_MODE_Y - 1)
+#define POS_DEMOD_MODE_MASK_H           	13
+#define POS_DEMOD_MODE_MASK_W           	41
+
+// Tunning step control
+#define POS_TUNE_STEP_X             		(POS_TUNE_FREQ_X + 45)
+#define POS_TUNE_STEP_Y             		(POS_TUNE_FREQ_Y - 21)
+//#define POS_TUNE_STEP_MASK_H            	15
+#define POS_TUNE_STEP_MASK_W            	(SMALL_FONT_WIDTH*7)
+
+//#define POS_RADIO_MODE_X            		4
+//#define POS_RADIO_MODE_Y            		5
+
+// Bottom bar
+#define POS_BOTTOM_BAR_X            		0
+#define POS_BOTTOM_BAR_Y            		228
+#define POS_BOTTOM_BAR_BUTTON_W         	62
+#define POS_BOTTOM_BAR_BUTTON_H         	16
+
+// Virtual Button 1
+#define POS_BOTTOM_BAR_F1_X         		(POS_BOTTOM_BAR_X + 2)
+#define POS_BOTTOM_BAR_F1_Y         		POS_BOTTOM_BAR_Y
+
+// --------------------------------------------------
+// Encoder controls indicator
+#define POS_ENCODER_IND_X                	0
+#define POS_ENCODER_IND_Y                	16
+
+
+// --------------------------------------------------
+// Standalone controls
+//
+// DSP mode
+// Lower DSP box
+#define POS_LEFTBOXES_IND_X              	0
+#define POS_LEFTBOXES_IND_Y              	130
+#define LEFTBOX_WIDTH 58 // used for the lower left side controls
+#define LEFTBOX_ROW_H  (28)
+#define LEFTBOX_ROW_2ND_OFF  (13)
+
+// Power level
+#define POS_PW_IND_X                		POS_DEMOD_MODE_X -1
+#define POS_PW_IND_Y                		POS_DEMOD_MODE_Y - 16
+
+#define POS_DIGMODE_IND_X              		0
+#define POS_DIGMODE_IND_Y              		(191)
+
+// S meter position
+#define POS_SM_IND_X                		116
+#define POS_SM_IND_Y                		0
+#define SM_IND_W (200)
+#define SM_IND_H (72 - BTM_MINUS)
+
+// Magic Eye like S-Meter maaaberu
+//define FSMETER ON
+//undef disable
+#define FSMETER
+
+//define Magic Eye
+//undef Face
+#define FSMETER_M
+
+//pattern define
+
+#ifdef FSMETER_M
+//Magic Eye
+//How many havy patterns
+#define FSCOUNT							9
+//Scaling
+#define FSPOS_SCALE						2
+//Width size
+#define FSPOS_W							16
+//Height size
+#define FSPOS_H							24
+//position
+#define FSPOS_IND_X						68
+#define FSPOS_IND_Y						100
+
+const unsigned short FS16x24_Table [] =
+{
+//1
+	    0x0FF0, 0x1FF8, 0x0FF0, 0x07E0, 0x03C0, 0x03C0, 0x0180, 0x0180,
+	    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+	    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+//2
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x1FF8, 0x0FF0, 0x07E0, 0x03C0, 0x0180,
+	    0x0180, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+	    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+//3
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x7FFE, 0xFFFF, 0x3FFC, 0x1FF8, 0x0FF0,
+	    0x07E0, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+	    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+//4
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x7FFE, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+	    0x7FFE, 0x3C3C, 0x1818, 0x0810, 0x0000, 0x0000, 0x0000, 0x0000,
+	    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+//5
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x7FFE, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+	    0xFFFF, 0xFC3F, 0xF81F, 0xF81F, 0x0000, 0x0000, 0x0000, 0x0000,
+	    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+//6
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x7FFE, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+	    0xFFFF, 0xFC3F, 0xF81F, 0xF81F, 0xF81F, 0xF81F, 0xF00F, 0xE007,
+	    0xC003, 0x8001, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+//7
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x7FFE, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+	    0xFFFF, 0xFC3F, 0xF81F, 0xF81F, 0xF81F, 0xF81F, 0xFC3F, 0xF81F,
+	    0xF00F, 0xE007, 0xC003, 0x8001, 0x0000, 0x0000, 0x0000, 0x0000,
+//8
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x7FFE, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+	    0xFFFF, 0xFC3F, 0xF81F, 0xF81F, 0xF81F, 0xF81F, 0xFC3F, 0xFE7F,
+	    0xFC3F, 0xFC3F, 0xF81F, 0xF00F, 0x6006, 0x2004, 0x0000, 0x0000,
+//9
+	    0x0FF0, 0x1FF8, 0x3FFC, 0x7FFE, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+	    0xFFFF, 0xFC3F, 0xF81F, 0x781F, 0xF81F, 0xF81F, 0xFC3F, 0xFE7F,
+	    0xFFFF, 0xFE7F, 0xFC3F, 0xFC3F, 0x7C3E, 0x381C, 0x1818, 0x0810,
+};
+const unsigned short FSCOLOR[FSCOUNT] =
+{
+		0x0400,//Green
+		0x0400,
+		0x0500,
+		0x0500,
+		0x0600,
+		0x0600,
+		0x0600,
+		0x0700,
+		0x0700,
+};
+#else
+
+//Face
+//How many have patterns
+#define FSCOUNT							5
+//Scaling
+#define FSPOS_SCALE						2
+//Width size
+#define FSPOS_W							16
+//Height size
+#define FSPOS_H							24
+//position
+#define FSPOS_IND_X						68
+#define FSPOS_IND_Y						100
+const unsigned short FS16x24_Table [] =
+{
+//1
+	    0x300C, 0x3FFC, 0x7FFE, 0xF08F, 0xB18D, 0xC003, 0xC003, 0xCA53,
+	    0xCA53, 0xC423, 0xCA53, 0x8A51, 0x8001, 0xC003, 0xC003, 0xC3C3,
+	    0xC7E3, 0xC813, 0xC003, 0xE007, 0xF00B, 0xFC2F, 0xCA53, 0x4992,
+//2
+	    0x300C, 0x3FFC, 0x7FFE, 0xF08F, 0xB18D, 0xC003, 0xC003, 0xCA73,
+	    0xCA73, 0xC453, 0xCA53, 0x8A71, 0x8001, 0xC003, 0xC003, 0xC003,
+	    0xC7E3, 0xCFF3, 0xC003, 0xE007, 0xF00B, 0xFC2F, 0xCA53, 0x4992,
+//3
+	    0x300C, 0x3FFC, 0x7FFE, 0xF08F, 0xB18D, 0xC003, 0xC003, 0xDFFB,
+	    0xCE73, 0xCA53, 0xCE73, 0x4422, 0x4002, 0xC003, 0xC003, 0xC003,
+	    0xC003, 0xCFF3, 0xC423, 0xE3C7, 0xF00B, 0xFC2F, 0xCA53, 0x4992,
+//4
+	    0x300C, 0x3FFC, 0x7FFE, 0xF08F, 0xB18D, 0xC003, 0xC003, 0xDBDB,
+	    0xD5AB, 0xCA53, 0xCE73, 0x4422, 0x4002, 0xC003, 0xDE7B, 0xD18B,
+	    0xD00B, 0xC813, 0xC423, 0xE2C7, 0xF18B, 0xFC2F, 0xCA53, 0x4992,
+//5
+	    0x6046, 0x3FFC, 0x7FFE, 0xF08F, 0x9999, 0xCD33, 0xC003, 0xD00B,
+	    0xC813, 0xC423, 0xC243, 0x4422, 0x4812, 0xD00B, 0xC003, 0xC003,
+	    0xC7E3, 0xC813, 0xCFF3, 0xE007, 0xF00B, 0xFC2F, 0xCA53, 0x4992,
+};
+const unsigned short FSCOLOR[FSCOUNT] =
+{
+		0x8420, //White
+		0xA528, //
+		0XC630, //
+		0xC630, //
+		0xFFFE, //
+};
+#endif
+//maaberu
+
+// Supply Voltage indicator
+//#define POS_PWRN_IND_X              		0
+#define POS_PWRN_IND_Y              		193
+
+#define POS_PWR_IND_X               		4
+#define POS_PWR_IND_Y               		(POS_PWRN_IND_Y + 15)
+
+
+// Temperature Indicator
+#define POS_TEMP_IND_X              		0
+#define POS_TEMP_IND_Y              		0
+
+// RTC
+#define POS_RTC								79
+
+#define POS_LOADANDDEBUG_Y					95
+#define POS_DEBUG_X							0
+#define POS_LOAD_X							280
+
+
+//
+// Location of numerical FWD/REV power indicator
+//
+#define	POS_PWR_NUM_IND_X					1
+#define	POS_PWR_NUM_IND_Y					80
+
+#define POS_MEMORYLABEL_X (161+(SMALL_FONT_WIDTH * 11)+4)
+#define POS_MEMORYLABEL_Y (64)
+// POSITIONS END
 
 static void     UiDriver_CreateMainFreqDisplay();
 
@@ -347,7 +574,6 @@ bool is_vfo_b()
 inline bool is_dsp_nb()
 {
 	return (ts.dsp_active & DSP_NB_ENABLE) != 0;
-//	return (ts.nb_setting > 0); // noise blanker ON
 }
 
 inline bool is_dsp_nr()
@@ -379,8 +605,7 @@ inline bool is_dsp_mpeak()
 typedef struct
 {
 	touchscreen_region_t region;
-	void (*function_short_press)();
-	void (*function_long_press)();
+	void (*function)();
 } touchaction_descr_t;
 
 
@@ -408,12 +633,11 @@ typedef struct
 	int32_t size;
 } keyaction_list_descr_t;
 
-
 /*
  * @brief find the matching region in a list of region and associated function
  * @returns: true, if a match for the touch coordinates region was found.
  */
-bool UiDriver_ProcessTouchActions(const touchaction_list_descr_t* tld, bool is_long_press)
+bool UiDriver_ProcessTouchActions(const touchaction_list_descr_t* tld)
 {
 	bool retval = false;
 	if (tld != NULL)
@@ -422,22 +646,12 @@ bool UiDriver_ProcessTouchActions(const touchaction_list_descr_t* tld, bool is_l
 		{
 			if (UiDriver_CheckTouchRegion(&tld->actions[idx].region))
 			{
-			    if (is_long_press)
-			    {
-			        if (tld->actions[idx].function_long_press != NULL)
-			        {
-			            (*tld->actions[idx].function_long_press)();
-			        }
-			    }
-			    else
-			    {
-			        if (tld->actions[idx].function_short_press != NULL)
-			        {
-			            (*tld->actions[idx].function_short_press)();
-			        }
-			    }
-			    retval = true;
-			    break;
+				if (tld->actions[idx].function != NULL)
+				{
+					(*tld->actions[idx].function)();
+				}
+				retval = true;
+				break;
 			}
 		}
 	}
@@ -506,21 +720,14 @@ static void   UiDriver_LcdBlankingProcessTimer()
 }
 
 static char ui_txt_msg_buffer[ui_txt_msg_buffer_max+1]; // we need to be able store the '\0' as well.
-//static const char ui_txt_empty_line[ui_txt_msg_buffer_max+1] = "                                             ";
+static const char ui_txt_empty_line[ui_txt_msg_buffer_max+1] = "                                             ";
 static int ui_txt_msg_idx= 0;
 static bool ui_txt_msg_update = false;
 
 
 void UiDriver_TextMsgClear()
 {
-	uint32_t fillcnt;
-	for(fillcnt=0; fillcnt<ui_txt_msg_buffer_max;fillcnt++)
-	{
-		ui_txt_msg_buffer[fillcnt]=' ';
-	}
-	ui_txt_msg_buffer[fillcnt]='\0';
-
-    UiLcdHy28_PrintText(POS_TextMsgLine_X,POS_TextMsgLine_Y, ui_txt_msg_buffer,Yellow,Black,ui_txt_msg_font);
+    UiLcdHy28_PrintText(5,92, ui_txt_empty_line,Yellow,Black,4);
     ui_txt_msg_idx = 0;
     ui_txt_msg_update = true;
 }
@@ -530,19 +737,8 @@ void UiDriver_TextMsgDisplay()
     if (ui_txt_msg_update == true)
     {
         ui_txt_msg_update = false;
-        if(ui_txt_msg_idx==0)
-        {
-        	uint32_t fillcnt;
-        	for(fillcnt=0; fillcnt<ui_txt_msg_buffer_max;fillcnt++)
-        	{
-        		ui_txt_msg_buffer[fillcnt]=' ';
-        	}
-        	ui_txt_msg_buffer[fillcnt]='\0';
-        }
-
-        //const char* txt_ptr = ui_txt_msg_idx == 0? ui_txt_empty_line:ui_txt_msg_buffer;
-        //UiLcdHy28_PrintText(POS_TextMsgLine_X,POS_TextMsgLine_Y,txt_ptr,Yellow,Black,4);
-        UiLcdHy28_PrintText(POS_TextMsgLine_X,POS_TextMsgLine_Y, ui_txt_msg_buffer,Yellow,Black,ui_txt_msg_font);
+        const char* txt_ptr = ui_txt_msg_idx == 0? ui_txt_empty_line:ui_txt_msg_buffer;
+        UiLcdHy28_PrintText(5,92,txt_ptr,Yellow,Black,4);
     }
 }
 
@@ -588,36 +784,7 @@ static void UiDriver_LeftBoxDisplay(const uint8_t row, const char *label, bool e
 	uint32_t bg_color = encoder_active?Orange:Blue;
 	uint32_t brdr_color = encoder_active?Orange:Blue;
 
-	uint16_t posX, posY;
-#ifdef USE_DISP_480_320
-	posX=POS_LEFTBOXES_IND_X+ (row * LEFTBOX_WIDTH);
-	posY=POS_LEFTBOXES_IND_Y;
 
-#else
-	posX=POS_LEFTBOXES_IND_X;
-	posY=POS_LEFTBOXES_IND_Y + (row * LEFTBOX_ROW_H);
-#endif
-
-	UiLcdHy28_DrawEmptyRect(posX, posY, LEFTBOX_ROW_H - 2, LEFTBOX_WIDTH - 2, brdr_color);
-	UiLcdHy28_PrintTextCentered(posX + 1, posY + 1,LEFTBOX_WIDTH - 3, label,
-			label_color, bg_color, 0);
-
-	// this causes flicker, but I am too lazy to fix that now
-	UiLcdHy28_DrawFullRect(posX + 1, posY + 1 + 12, LEFTBOX_ROW_H - 4 - 11, LEFTBOX_WIDTH - 3, text_is_value?Black:bg_color);
-	if (text_is_value)
-	{
-		UiLcdHy28_PrintTextRight((posX + LEFTBOX_WIDTH - 4), (posY + 1 + LEFTBOX_ROW_2ND_OFF), text,
-				clr_val, text_is_value?Black:bg_color, 0);
-	}
-	else
-	{
-		UiLcdHy28_PrintTextCentered((posX + 1), (posY + 1 + LEFTBOX_ROW_2ND_OFF),LEFTBOX_WIDTH - 3, text,
-				color, bg_color, 0);
-	}
-
-
-
-	/*
 	UiLcdHy28_DrawEmptyRect(POS_LEFTBOXES_IND_X, POS_LEFTBOXES_IND_Y + (row * LEFTBOX_ROW_H), LEFTBOX_ROW_H - 2, LEFTBOX_WIDTH - 2, brdr_color);
 	UiLcdHy28_PrintTextCentered(POS_LEFTBOXES_IND_X + 1, POS_LEFTBOXES_IND_Y + (row * LEFTBOX_ROW_H) + 1,LEFTBOX_WIDTH - 3, label,
 			label_color, bg_color, 0);
@@ -634,7 +801,6 @@ static void UiDriver_LeftBoxDisplay(const uint8_t row, const char *label, bool e
 		UiLcdHy28_PrintTextCentered((POS_LEFTBOXES_IND_X + 1), (POS_LEFTBOXES_IND_Y + (row * LEFTBOX_ROW_H) + 1 + LEFTBOX_ROW_2ND_OFF),LEFTBOX_WIDTH - 3, text,
 				color, bg_color, 0);
 	}
-	*/
 }
 
 static void UiDriver_LcdBlankingStealthSwitch()
@@ -744,7 +910,7 @@ void UiDriver_DebugInfo_DisplayEnable(bool enable)
 
 }
 
-void UiDriver_SpectrumChangeLayoutParameters()
+void UiDriver_SpectrumZoomChangeLevel()
 {
 	UiSpectrum_WaterfallClearData();
 	AudioDriver_SetRxAudioProcessing(ts.dmod_mode, false);
@@ -902,12 +1068,16 @@ void UiDriver_Init()
 	UiDriver_LcdBlankingStartTimer();			// init timing for LCD blanking
 	ts.lcd_blanking_time = ts.sysclock + LCD_STARTUP_BLANKING_TIME;
 	ts.low_power_shutdown_time = ts.sysclock + LOW_POWER_SHUTDOWN_DELAY_TIME;
+
+#ifdef USE_DISP_480_320
+	UiSpectrum_SetWaterfallMemoryPointer(ts.ramsize);
+#endif
 }
 
 #define BOTTOM_BAR_LABEL_W (56)
 void UiDriver_DrawFButtonLabel(uint8_t button_num, const char* label, uint32_t label_color)
 {
-	UiLcdHy28_PrintTextCentered(POS_BOTTOM_BAR_F1_X + (button_num - 1)*(POS_BOTTOM_BAR_BUTTON_W+2), POS_BOTTOM_BAR_F1_Y, BOTTOM_BAR_LABEL_W, label,
+	UiLcdHy28_PrintTextCentered(POS_BOTTOM_BAR_F1_X + (button_num - 1)*64, POS_BOTTOM_BAR_F1_Y, BOTTOM_BAR_LABEL_W, label,
 			label_color, Black, 0);
 }
 
@@ -925,23 +1095,11 @@ void UiDriver_EncoderDisplay(const uint8_t row, const uint8_t column, const char
 	uint32_t bg_color = encoder_active?Orange:Grey;
 	uint32_t brdr_color = encoder_active?Orange:Grey;
 
-#ifdef USE_DISP_480_320
-#define Xspacing 5
-	UiLcdHy28_DrawEmptyRect(POS_ENCODER_IND_X + ENC_COL_W *2 * column + row *ENC_COL_W+column*Xspacing, POS_ENCODER_IND_Y , ENC_ROW_H - 2, ENC_COL_W - 2, brdr_color);
-	UiLcdHy28_PrintTextCentered((POS_ENCODER_IND_X + 1 + ENC_COL_W * 2 * column + row *ENC_COL_W+column*Xspacing), (POS_ENCODER_IND_Y + 1),ENC_COL_W - 3, label,
-			label_color, bg_color, 0);
-	UiLcdHy28_PrintTextRight((POS_ENCODER_IND_X + ENC_COL_W - 4 + ENC_COL_W * 2 * column+ row *ENC_COL_W+column*Xspacing), (POS_ENCODER_IND_Y + 1 + ENC_ROW_2ND_OFF), temp,
-			color, Black, 0);
-
-#else
-
 	UiLcdHy28_DrawEmptyRect(POS_ENCODER_IND_X + ENC_COL_W * column, POS_ENCODER_IND_Y + row * ENC_ROW_H, ENC_ROW_H - 2, ENC_COL_W - 2, brdr_color);
 	UiLcdHy28_PrintTextCentered((POS_ENCODER_IND_X + 1 + ENC_COL_W * column), (POS_ENCODER_IND_Y + 1 + row * ENC_ROW_H),ENC_COL_W - 3, label,
 			label_color, bg_color, 0);
 	UiLcdHy28_PrintTextRight((POS_ENCODER_IND_X + ENC_COL_W - 4 + ENC_COL_W * column), (POS_ENCODER_IND_Y + 1 + row * ENC_ROW_H + ENC_ROW_2ND_OFF), temp,
 			color, Black, 0);
-
-#endif
 }
 
 
@@ -1716,15 +1874,6 @@ static void UiDriver_CreateFunctionButtons(bool full_repaint)
 	UiDriver_FButton_F5Tune();
 }
 
-void UiDriver_SetSpectrumMode(SpectrumMode_t mode)
-{
-    ts.flags1 = (ts.flags1 & ~(FLAGS1_SCOPE_ENABLED | FLAGS1_WFALL_ENABLED)) |(mode << 7);
-}
-SpectrumMode_t UiDriver_GetSpectrumMode()
-{
-    return (ts.flags1 & (FLAGS1_SCOPE_ENABLED | FLAGS1_WFALL_ENABLED))  >> 7;
-}
-
 //
 //*----------------------------------------------------------------------------
 //* Function Name       : UiDriverDrawSMeter
@@ -1752,11 +1901,6 @@ static void UiDriver_CreateDesktop()
 
 	// S-meter
 	UiDriver_CreateMeters();
-
-	if (UiDriver_GetSpectrumMode() == SPECTRUM_BLANK)
-	{
-	    UiDriver_SetSpectrumMode(SPECTRUM_DUAL);
-	}
 
 	// Spectrum scope
 	UiSpectrum_Init();
@@ -2147,6 +2291,57 @@ static void UiDriver_UpdateMeter(uchar val, uchar warn, uint32_t color_norm, uin
 			}
 			// Lines
 			UiLcdHy28_DrawStraightLineTriple(((POS_SM_IND_X + 18) + i*5),(ypos - v_s),v_s,LCD_DIR_VERTICAL,col);
+//face S-meter draw
+#ifdef FSMETER
+//position
+			uint32_t xpos;
+			uint32_t dpos;
+			uchar Slevel;
+			uint32_t lx;
+			uint32_t ly;
+			uint32_t bitpos;
+			uint32_t dcolor,mcolor;
+//S meter Scale point
+			Slevel=(val * 100 / SMETER_MAX_LEVEL) * FSCOUNT / 60;
+//S OverFlow == Full
+			if (Slevel >= FSCOUNT)
+				{
+				Slevel = FSCOUNT -1;
+				}
+//Scale picture point calc
+			xpos=Slevel * 24;
+//Drawing
+			lx = 0;
+			ly = 0;
+			bitpos = 32768; //MSB
+//dot color
+			mcolor = FSCOLOR[Slevel];
+//bitmap draw
+		do
+			{
+				dpos = FS16x24_Table[xpos];
+				if( dpos & bitpos )
+				{
+					dcolor = mcolor;
+				} else {
+					dcolor = Black;
+				}
+				UiLcdHy28_DrawStraightLine(lx+FSPOS_IND_X,ly+FSPOS_IND_Y,FSPOS_SCALE,FSPOS_SCALE,dcolor);
+				bitpos = bitpos / 2;
+				if (bitpos == 0)
+				{
+					bitpos = 32768;
+					xpos++;
+				}
+				lx = lx + FSPOS_SCALE;
+				if ( lx >= FSPOS_W * FSPOS_SCALE)
+				{
+					lx = 0;
+					ly++;
+				}
+			} while(ly < FSPOS_H);
+#endif
+
 		}
 
 		meters[meterId].last = val;
@@ -2762,9 +2957,8 @@ static void UiDriver_TimeScheduler()
 	static bool startup_done_flag = 0;
 	static bool	dsp_rx_reenable_flag = 0;
 	static ulong dsp_rx_reenable_timer = 0;
-#ifdef OBSOLETE_NR
 	static uchar dsp_crash_count = 0;
-#endif
+
 	static enum TRX_States_t last_state = TRX_STATE_RX; // we assume everything is
 	enum TRX_States_t state;
 
@@ -2861,7 +3055,6 @@ static void UiDriver_TimeScheduler()
 			old_tone_det_enable = (bool)ts.fm_subaudible_tone_det_select;
 		}
 
-#ifdef OBSOLETE_NR
 		// DSP crash detection
 		if(is_dsp_nr() && !is_dsp_nr_postagc() && !ads.af_disabled && !ts.dsp_inhibit)    // Do this if enabled and "Pre-AGC" DSP NR enabled
 		{
@@ -2884,7 +3077,6 @@ static void UiDriver_TimeScheduler()
 				dsp_crash_count = 0;              // clear crash count flag
 			}
 		}
-#endif
 	}
 
 	/*** TX MODE ONLY ***/
@@ -2935,9 +3127,13 @@ static void UiDriver_TimeScheduler()
 	{
 		startup_done_flag = true;                  // set flag so that we do this only once
 
-		//
-		UiDriver_DisplayEncoderTwoMode();
-
+		// TODO: Get this away by fixing the startup of the noise blanker
+		if(ts.temp_nb < 0x80)       // load NB setting after processing first audio data
+		{
+			ts.nb_setting = ts.temp_nb;
+			UiDriver_DisplayEncoderTwoMode();
+			ts.temp_nb = 0xf0;
+		}
 		ts.dsp_inhibit = 0;                 // allow DSP to function
 
 
@@ -3429,29 +3625,19 @@ static void UiDriver_CheckEncoderTwo()
 					// Update DSP/NB setting
 				case ENC_TWO_MODE_SIG_PROC:
 						// Signal processor setting
-						// this is AGC setting OR noise blanker setting
-						if(is_dsp_nb()) // noise blanker is active (ts.nb_setting > 0)
-						{
-							ts.nb_setting = change_and_limit_uint(ts.nb_setting,pot_diff_step,0,MAX_NB_SETTING);
-						}
-						else // AGC mode setting
-						{
-							//                    ts.agc_wdsp_tau_decay = change_and_limit_int(ts.agc_wdsp_tau_decay,pot_diff_step * 100,100,5000);
-							ts.agc_wdsp_mode = change_and_limit_uint(ts.agc_wdsp_mode,pot_diff_step,0,5);
-							ts.agc_wdsp_switch_mode = 1; // set flag, so that mode switching really takes place in AGC_prep
-							AudioDriver_SetupAgcWdsp();
-						}
+
+						//                    ts.agc_wdsp_tau_decay = change_and_limit_int(ts.agc_wdsp_tau_decay,pot_diff_step * 100,100,5000);
+						ts.agc_wdsp_mode = change_and_limit_uint(ts.agc_wdsp_mode,pot_diff_step,0,5);
+						ts.agc_wdsp_switch_mode = 1; // set flag, so that mode switching really takes place in AGC_prep
+						AudioDriver_SetupAgcWdsp();
+
 					UiDriver_DisplayNoiseBlanker(1);
 					break;
 				case ENC_TWO_MODE_NR:
 					if (is_dsp_nr())        // only allow adjustment if DSP NR is active
 					{
 						ts.dsp_nr_strength = change_and_limit_uint(ts.dsp_nr_strength,pot_diff_step,0,DSP_NR_STRENGTH_MAX);
-
-						// this causes considerable noise
-						//AudioDriver_SetRxAudioProcessing(ts.dmod_mode, false);
-						// we do this instead
-					    ts.nr_alpha = 0.9 + ((float32_t)ts.dsp_nr_strength / 1000.0);
+						AudioDriver_SetRxAudioProcessing(ts.dmod_mode, false);
 					}
 					// Signal processor setting
 					UiDriver_DisplayDSPMode(1);
@@ -3730,8 +3916,7 @@ static void UiDriver_DisplayEncoderTwoMode()
 		break;
 	case ENC_TWO_MODE_SIG_PROC:
 		UiDriver_DisplayRfGain(0);
-		//		UiDriver_DisplayNoiseBlanker(inactive);
-		UiDriver_DisplayNoiseBlanker(1);
+		UiDriver_DisplayNoiseBlanker(inactive);
 		UiDriver_DisplayDSPMode(0);
 		break;
 	case ENC_TWO_MODE_PEAK_F:
@@ -3897,7 +4082,6 @@ static void UiDriver_DisplayCmpLevel(bool encoder_active)
 	UiDriver_EncoderDisplay(1,0,"CMP" , encoder_active, outs, color);
 }
 
-#ifdef OBSOLETE_NR
 uint32_t dsp_nr_color_map()
 {
 	uint32_t color = White;      // Make it white by default
@@ -3911,7 +4095,6 @@ uint32_t dsp_nr_color_map()
 
 	return color;
 }
-#endif
 
 static void UiDriver_DisplayDSPMode(bool encoder_active)
 {
@@ -3934,9 +4117,7 @@ static void UiDriver_DisplayDSPMode(bool encoder_active)
 	case DSP_NR_ENABLE:
 		txt[0] = "NR";
 		snprintf(val_txt,7,"%5u", ts.dsp_nr_strength);
-#ifdef OBSOLETE_NR
 		clr_val = dsp_nr_color_map();
-#endif
 		txt[1] = val_txt;
 		txt_is_value = true;
 		break;
@@ -3946,9 +4127,7 @@ static void UiDriver_DisplayDSPMode(bool encoder_active)
 	case DSP_NOTCH_ENABLE|DSP_NR_ENABLE:
 	txt[0] = "NR+NOTC";
 	snprintf(val_txt,7,"%5u", ts.dsp_nr_strength);
-#ifdef OBSOLETE_NR
 	clr_val = dsp_nr_color_map();
-#endif
 	txt[1] = val_txt;
 	txt_is_value = true;
 	break;
@@ -4115,9 +4294,9 @@ static void UiDriver_DisplayNoiseBlanker(bool encoder_active)
 	const char *label, *val_txt;
 	int32_t value = 0;
 //	bool is_active = false;
-	//label = "NB";
+	label = "NB";
 	//    label = "DEC";
-//#if 0
+#if 0
 		//
 		// Noise blanker settings display
 		//
@@ -4136,42 +4315,47 @@ static void UiDriver_DisplayNoiseBlanker(bool encoder_active)
 			}
 			label = "NB";
 			value = ts.nb_setting;
-			snprintf(temp,5,"%3ld",value);
-			val_txt = temp;
+			is_active = true;
 		}
 
+		if (is_active == false)
+		{
+			val_txt = "off";
+		}
 		else
 		{
-//#endif
-			switch(ts.agc_wdsp_mode)
-			{
-			case 0:
-				label = "vLO";
-				break;
-			case 1:
-				label = "LON";
-				break;
-			case 2:
-				label = "SLO";
-				break;
-			case 3:
-				label = "MED";
-				break;
-			case 4:
-				label = "FAS";
-				break;
-			case 5:
-				label = "OFF";
-				break;
-			default:
-				label = "???";
-				break;
-			}
-			value = (int32_t)(ts.agc_wdsp_tau_decay[ts.agc_wdsp_mode] / 10.0);
 			snprintf(temp,5,"%3ld",value);
 			val_txt = temp;
 		}
-		UiDriver_EncoderDisplay(1,1,label, encoder_active, val_txt, color);
+#endif
+		switch(ts.agc_wdsp_mode)
+		{
+		case 0:
+			label = "vLO";
+			break;
+		case 1:
+			label = "LON";
+			break;
+		case 2:
+			label = "SLO";
+			break;
+		case 3:
+			label = "MED";
+			break;
+		case 4:
+			label = "FAS";
+			break;
+		case 5:
+			label = "OFF";
+			break;
+		default:
+			label = "???";
+			break;
+		}
+		value = (int32_t)(ts.agc_wdsp_tau_decay[ts.agc_wdsp_mode] / 10.0);
+		snprintf(temp,5,"%3ld",value);
+		val_txt = temp;
+	UiDriver_EncoderDisplay(1,1,label, encoder_active, val_txt, color);
 }
 
 #define NOTCH_DELTA_Y (2*ENC_ROW_H)
@@ -4294,18 +4478,6 @@ static void UiDriver_HandleSMeter()
 		//
 		{
 			static bool         clip_indicate = 0;
-
-// we fixed the S-Meter to display ONLY dBm, NOT dBm/Hz
-			/*
-			if (ts.s_meter == DISPLAY_S_METER_DBM) // based on dBm calculation
-			{
-				sm.gain_calc = sm.dbm;
-			}
-			else // based on dBm/Hz calculation
-			{
-				sm.gain_calc = sm.dbmhz;
-			}
-*/
 
 			sm.gain_calc = sm.dbm;
 
@@ -5046,17 +5218,8 @@ static void UiDriver_KeyTestScreen()
 	char txt_buf[40];
 	const char* txt;
 
-	if (UiDriver_IsButtonPressed(TOUCHSCREEN_ACTIVE))
-	{
-	    UiLcdHy28_TouchscreenHasProcessableCoordinates();
-	    // touchscreen was pressed:
-	    // wait a little and see if touch is still pressed
-	    // some TRX seem to see touchscreen events even if not pressed
-	    HAL_Delay(500);
-	}
 	for(i = 0; i < buttons.num ; i++)	 			// scan all buttons
 	{
-
 		if(UiDriver_IsButtonPressed(i))	 		// is one button being pressed?
 		{
 			stat |= 1<<i;						// yes - remember which one
@@ -5213,16 +5376,6 @@ static void UiDriver_KeyTestScreen()
 		}
 	}
 }
-#ifdef USE_HIRES_TOUCH
-//cross size definitions, must be odd
-#define CrossSizeH 11
-#define CrossSizeV 11
-static void DrawCross(int16_t* coord,uint16_t color)
-{
-	UiLcdHy28_DrawStraightLine(coord[0]-(CrossSizeH/2), coord[1],CrossSizeH,        LCD_DIR_HORIZONTAL,color);
-	UiLcdHy28_DrawStraightLine(coord[0], coord[1]-(CrossSizeV/2),CrossSizeV,        LCD_DIR_VERTICAL,color);
-}
-#endif
 
 /*
  * @brief Touchscreen Calibration function
@@ -5231,122 +5384,7 @@ static void DrawCross(int16_t* coord,uint16_t color)
 
 static bool UiDriver_TouchscreenCalibration()
 {
-#ifdef USE_HIRES_TOUCH
-	bool retval = false;
 
-	if (UiDriver_IsButtonPressed(TOUCHSCREEN_ACTIVE) && UiDriver_IsButtonPressed(BUTTON_F5_PRESSED))
-	{
-
-		uint32_t clr_fg, clr_bg;
-		clr_bg = Black;
-		clr_fg = White;
-
-		int16_t cross1[4] = {20,20,0,0};
-		int16_t cross2[4] = {MAX_X-20,20,0,0};
-		int16_t cross3[4] = {20,MAX_Y-20,0,0};
-		int16_t cross4[4] = {MAX_X-20,MAX_Y-20,0,0};
-		int16_t cross5[4] = {MAX_X/2,MAX_Y/2,0,0};
-
-		uint16_t x_corr[1], y_corr[1];
-		float diffx,diffy;
-
-		*x_corr = 0;
-		*y_corr = 0;
-
-		UiLcdHy28_LcdClear(clr_bg);							// clear the screen
-		//											// now do all of the warnings, blah, blah...
-		UiLcdHy28_PrintText(50,05,"TOUCH CALIBRATION",clr_fg,clr_bg,1);
-		UiLcdHy28_PrintTextCentered(2, 70, 316, "If you don't want to do this\n"
-				"press POWER button to start normally.\n"
-				"press and hold BAND+ AND BAND-.\n"
-				" Settings will be saved at POWEROFF"
-				,clr_fg,clr_bg,0);
-
-
-
-		//
-		// On screen delay									// delay a bit...
-		HAL_Delay(5000);
-
-		// add this for emphasis
-		UiLcdHy28_PrintTextCentered(2, 195, 316, "Press BAND+ and BAND-\n"
-				"to start calibration",clr_fg,clr_bg,0);
-
-		while((((UiDriver_IsButtonPressed(BUTTON_BNDM_PRESSED)) && (UiDriver_IsButtonPressed(BUTTON_BNDP_PRESSED))) == false) && UiDriver_IsButtonPressed(BUTTON_POWER_PRESSED) == false)
-		{
-			HAL_Delay(10);
-		}
-
-
-		if(UiDriver_IsButtonPressed(BUTTON_POWER_PRESSED))
-		{
-			UiLcdHy28_LcdClear(Black);							// clear the screen
-			UiLcdHy28_PrintText(2,108,"      ...performing normal start...",White,Black,0);
-			HAL_Delay(3000);
-			retval = false;
-		}
-		else
-		{
-			UiLcdHy28_LcdClear(clr_bg);							// clear the screen
-			UiLcdHy28_PrintTextCentered(2,70, 316,
-					"On the next screen crosses will appear.\n"
-					"Touch as exact as you can on the middle\n"
-					"of each cross. After three valid\n"
-					"samples position of cross changes.\n"
-					"Repeat until the five test positions\n"
-					"are finished.",clr_fg,clr_bg,0);
-
-			UiLcdHy28_PrintText(35,195,"Touch at any position to start.",clr_fg,clr_bg,0);
-
-			while(UiDriver_IsButtonPressed(TOUCHSCREEN_ACTIVE) == false)
-			{
-				HAL_Delay(40);
-			}
-			UiLcdHy28_TouchscreenReadCoordinates();
-			ts.tp->state = TP_DATASETS_NONE;
-
-			UiLcdHy28_LcdClear(clr_bg);							// clear the screen
-			DrawCross(cross1,clr_fg);
-
-
-			UiDriver_DoCrossCheck(cross1);
-
-			UiLcdHy28_LcdClear(clr_bg);
-			clr_fg = White;
-			DrawCross(cross2,clr_fg);
-			UiDriver_DoCrossCheck(cross2);
-
-			UiLcdHy28_LcdClear(clr_bg);
-			clr_fg = White;
-			DrawCross(cross3,clr_fg);
-			UiDriver_DoCrossCheck(cross3);
-
-			UiLcdHy28_LcdClear(clr_bg);
-			clr_fg = White;
-
-			DrawCross(cross4,clr_fg);
-			UiDriver_DoCrossCheck(cross4);
-
-			UiLcdHy28_LcdClear(clr_bg);
-			DrawCross(cross1,clr_fg);
-			UiDriver_DoCrossCheck(cross5);
-
-			diffx = roundf(*x_corr / 15);
-			diffy = roundf(*y_corr / 15);
-			*x_corr = diffx;
-			*y_corr = diffy;
-
-			UiLcdHy28_LcdClear(clr_bg);
-
-			//    sprintf(txt_buf,"correction is  : %d/%d", *x_corr, *y_corr);
-			//    UiLcdHy28_PrintText(10,55,txt_buf,clr_fg,clr_bg,0);
-
-			HAL_Delay(4000);
-			retval = true;
-			ts.menu_var_changed = true;
-		}
-	}
-#else
 	bool retval = false;
 
 	if (UiDriver_IsButtonPressed(TOUCHSCREEN_ACTIVE) && UiDriver_IsButtonPressed(BUTTON_F5_PRESSED))
@@ -5474,61 +5512,11 @@ static bool UiDriver_TouchscreenCalibration()
 			ts.menu_var_changed = true;
 		}
 	}
-#endif
 	return retval;
 }
 
 
-#ifdef  USE_HIRES_TOUCH
-#define MaxTouchError 20
-void UiDriver_DoCrossCheck(int16_t cross[])
-{
-	uint32_t clr_fg, clr_bg;
-	char txt_buf[40];
-	uchar datavalid = 0, samples = 0;
 
-	int16_t* xt_corr=&cross[2];
-	int16_t* yt_corr=&cross[3];
-
-	clr_bg = Black;
-	clr_fg = White;
-
-	do
-	{
-		while(UiDriver_IsButtonPressed(TOUCHSCREEN_ACTIVE) == false)
-		{
-			HAL_Delay(40);
-		}
-
-		if (UiLcdHy28_TouchscreenHasProcessableCoordinates())
-		{
-			if(abs(ts.tp->hr_x - cross[0]) < MaxTouchError && abs(ts.tp->hr_y - cross[1]) < MaxTouchError)
-			{
-				datavalid++;
-				*xt_corr += (ts.tp->hr_x - cross[0]);
-				*yt_corr += (ts.tp->hr_y - cross[1]);
-				clr_fg = Green;
-				snprintf(txt_buf,40,"Try (%d) error: x = %+d / y = %+d       ",datavalid,ts.tp->hr_x-cross[0],ts.tp->hr_y-cross[1]);	//show misajustments
-			}
-			else
-			{
-				clr_fg = Red;
-				snprintf(txt_buf,40,"Try (%d) BIG error: x = %+d / y = %+d",samples,ts.tp->hr_x-cross[0],ts.tp->hr_y-cross[1]);	//show misajustments
-			}
-			samples++;
-			UiLcdHy28_PrintText(10,70,txt_buf,clr_fg,clr_bg,0);
-			ts.tp->state = TP_DATASETS_PROCESSED;
-		}
-	}
-	while(datavalid < 3);
-
-	HAL_Delay(4000);
-}
-
-
-
-
-#else
 void UiDriver_DoCrossCheck(char cross[],char* xt_corr, char* yt_corr)
 {
 	uint32_t clr_fg, clr_bg;
@@ -5569,7 +5557,7 @@ void UiDriver_DoCrossCheck(char cross[],char* xt_corr, char* yt_corr)
 
 	HAL_Delay(4000);
 }
-#endif
+
 static uint16_t startUpScreen_nextLineY;
 static bool startUpError = false;
 
@@ -5584,7 +5572,7 @@ void UiDriver_StartupScreen_LogIfProblem(bool isProblem, const char* txt)
 {
 	if (isProblem)
 	{
-		startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(StartUpScreen_START_X,startUpScreen_nextLineY,320,txt,Black,Red3,0);
+		startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(0,startUpScreen_nextLineY,320,txt,Black,Red3,0);
 		startUpError = true;
 	}
 }
@@ -5631,22 +5619,22 @@ void UiDriver_StartUpScreenInit()
 	uint32_t clr;
 	// Clear all
 	UiLcdHy28_LcdClear(Black);
-	uint16_t nextY = StartUpScreen_START_Y;
+	uint16_t nextY = 10;
 	snprintf(tx,100,"%s",DEVICE_STRING);
-	nextY = UiLcdHy28_PrintTextCentered(StartUpScreen_START_X, nextY, 320, tx, Cyan, Black, 1);
+	nextY = UiLcdHy28_PrintTextCentered(0, nextY, 320, tx, Cyan, Black, 1);
 
 #ifdef TRX_HW_LIC
 	snprintf(tx,100,"Hardware License: %s",TRX_HW_LIC);
-	nextY = UiLcdHy28_PrintTextCentered(StartUpScreen_START_X, nextY + 3, 320, tx, White,Black, 0);
+	nextY = UiLcdHy28_PrintTextCentered(0, nextY + 3, 320, tx, White,Black, 0);
 #endif
 #ifdef TRX_HW_CREATOR
-	nextY = UiLcdHy28_PrintTextCentered(StartUpScreen_START_X, nextY, 320, TRX_HW_CREATOR, White,Black, 0);
+	nextY = UiLcdHy28_PrintTextCentered(0, nextY, 320, TRX_HW_CREATOR, White,Black, 0);
 #endif
 
 	snprintf(tx,100,"%s%s","UHSDR Vers. ",UiMenu_GetSystemInfo(&clr,INFO_FW_VERSION));
-	nextY = UiLcdHy28_PrintTextCentered(StartUpScreen_START_X, nextY + 8, 320, tx, Yellow, Black, 1);
+	nextY = UiLcdHy28_PrintTextCentered(0, nextY + 8, 320, tx, Yellow, Black, 1);
 
-	nextY = UiLcdHy28_PrintTextCentered(StartUpScreen_START_X, nextY + 3, 320, "Firmware License: " UHSDR_LICENCE "\n" UHSDR_REPO, White, Black, 0);
+	nextY = UiLcdHy28_PrintTextCentered(0, nextY + 3, 320, "Firmware License: " UHSDR_LICENCE "\n" UHSDR_REPO, White, Black, 0);
 
 	// show important error status
 	startUpScreen_nextLineY = nextY + 8; // reset y coord to first line of error messages
@@ -5664,24 +5652,22 @@ void UiDriver_StartUpScreenFinish()
 	uint32_t hold_time;
 
 	UiDriver_StartupScreen_LogIfProblem(osc->isPresent() == false, "Local Oscillator NOT Detected!");
-	if(!Si5351a_IsPresent()) {
-		UiDriver_StartupScreen_LogIfProblem(lo.sensor_present == false, "MCP9801 Temp Sensor NOT Detected!");
-	}
+	UiDriver_StartupScreen_LogIfProblem(lo.sensor_present == false, "MCP9801 Temp Sensor NOT Detected!");
+
 	if(ts.ee_init_stat != HAL_OK)                                   // problem with EEPROM init
 	{
 		snprintf(tx,100, "EEPROM Init Error Code: %d", ts.ee_init_stat);
 		UiDriver_StartupScreen_LogIfProblem(true, tx);
 	}
 
-	if(!Si5351a_IsPresent()) {
-	  UiDriver_StartupScreen_LogIfProblem((HAL_ADC_GetValue(&hadc2) > MAX_VSWR_MOD_VALUE) && (HAL_ADC_GetValue(&hadc3) > MAX_VSWR_MOD_VALUE),
+	UiDriver_StartupScreen_LogIfProblem((HAL_ADC_GetValue(&hadc2) > MAX_VSWR_MOD_VALUE) && (HAL_ADC_GetValue(&hadc3) > MAX_VSWR_MOD_VALUE),
 			"SWR Bridge resistor mod NOT completed!");
-	}
+
 	if (UiDriver_FirmwareVersionCheck())
 	{
 		hold_time = 10000; // 15s
 		txp = "Firmware change detected!\nPlease review settings!";
-		startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(StartUpScreen_START_X,startUpScreen_nextLineY + 10,320,txp,White,Black,0);
+		startUpScreen_nextLineY = UiLcdHy28_PrintTextCentered(0,startUpScreen_nextLineY + 10,320,txp,White,Black,0);
 
 		UiDriver_FirmwareVersionUpdateConfig();
 	}
@@ -5701,7 +5687,7 @@ void UiDriver_StartUpScreenFinish()
 		fg_clr = Green;
 	}
 
-	UiLcdHy28_PrintTextCentered(StartUpScreen_START_X,startUpScreen_nextLineY + 10,320,txp,fg_clr,clr,0);
+	UiLcdHy28_PrintTextCentered(0,startUpScreen_nextLineY + 10,320,txp,fg_clr,clr,0);
 
 	HAL_Delay(hold_time);
 
@@ -5801,35 +5787,19 @@ static void UiAction_ChangeToNextDspMode()
 }
 
 
-static void UiAction_ChangeSpectrumSize()
-{
-    ts.menu_var_changed = 1;
-    if (ts.spectrum_size == SPECTRUM_BIG)
-    {
-        ts.spectrum_size = SPECTRUM_NORMAL;
-    }
-    else
-    {
-        ts.spectrum_size = SPECTRUM_BIG;
-    }
-
-    UiDriver_SpectrumChangeLayoutParameters();
-}
-
-
 static void UiAction_ChangeSpectrumZoomLevelDown()
 {
 	ts.menu_var_changed = 1;
 	decr_wrap_uint8(&sd.magnify,MAGNIFY_MIN,MAGNIFY_MAX);
 
-	UiDriver_SpectrumChangeLayoutParameters();
+	UiDriver_SpectrumZoomChangeLevel();
 }
 
 static void UiAction_ChangeSpectrumZoomLevelUp()
 {
 	ts.menu_var_changed = 1;
 	incr_wrap_uint8(&sd.magnify,MAGNIFY_MIN,MAGNIFY_MAX);
-	UiDriver_SpectrumChangeLayoutParameters();
+	UiDriver_SpectrumZoomChangeLevel();
 }
 
 static void UiAction_ChangeFrequencyToNextKhz()
@@ -5840,18 +5810,17 @@ static void UiAction_ChangeFrequencyToNextKhz()
 
 static void UiAction_ToggleWaterfallScopeDisplay()
 {
-    SpectrumMode_t temp = UiDriver_GetSpectrumMode();
-
-    if (temp != SPECTRUM_BLANK)
-    {
-        // we want range 0 - 2 instead of the normal 1 - 3
-        temp--;
-    }
-    temp++;
-    temp%=3;
-    temp++;
-    UiDriver_SetSpectrumMode(temp);
-    UiSpectrum_Init();   // init spectrum display
+	if(is_waterfallmode())
+	{
+		// is the waterfall mode active?
+		ts.flags1 &=  ~FLAGS1_WFALL_SCOPE_TOGGLE;     // yes, turn it off
+	}
+	else
+	{
+		// waterfall mode was turned off
+		ts.flags1 |=  FLAGS1_WFALL_SCOPE_TOGGLE;          // turn it on
+	}
+	UiSpectrum_Init();   // init spectrum display
 }
 
 static void UiAction_ChangeDemodMode()
@@ -6408,24 +6377,22 @@ static void UiAction_StepPlusHold()
 }
 // these maps control the touch regions to function mapping in a specific mode
 // this is the normal mode, available when not in menu mode
-// first function is the normal touch, second function is long touch
-// if not used, function entry should be set to NULL
 static const touchaction_descr_t touchactions_normal[] =
 {
-		{ { 19,60,48,60 }, UiAction_ChangeLowerMeterUp,             NULL },  // Lower Meter: Meter Toggle
-		{ { 10,28,27,31 }, UiAction_ToggleWaterfallScopeDisplay,    UiAction_ChangeSpectrumSize }, // Spectrum Bar Left Part: WaterfallScope Toggle
-		{ { 29,33,26,32 }, UiAction_ChangeSpectrumZoomLevelDown,    NULL }, // Spectrum Bar Middle Part: Decrease Zoom Level
-		{ { 52,60,26,32 }, UiAction_ChangeSpectrumZoomLevelUp,      NULL }, // Spectrum Bar Right Part: Increase Zoom Level
-		{ { 43,60,00,04 }, UiAction_ChangeFrequencyToNextKhz,       NULL }, // Tune button:Set last 3 digits to zero
-		{ { 16,24,40,44 }, UiAction_ChangeDemodMode,                NULL }, // Demod Mode Box: mode switch
-		{ { 16,24,45,48 }, UiAction_ChangePowerLevel,               NULL }, // Power Box: TX Power Increase
-		{ { 10,16,44,50 }, UiAction_ChangeAudioSource,              NULL }, // Audio In Box: Switch Source
-		{ { 48,52,35,37 }, UiAction_ChangeBandDownOrUp,             NULL }, // Left Part Band Display: Band down
-		{ { 53,60,35,37 }, UiAction_ChangeBandUpOrDown,             NULL }, // Right Part Band Display: Band up
-		{ { 00,07,21,30 }, Codec_RestartI2S,                        NULL }, // DSP Box: Restart I2S
-		{ { 8,60,11,19  }, UiAction_ChangeFrequencyByTouch,         NULL }, // Scope Draw Area: Tune to Touch
-		{ { 0,7,10,13   }, UiAction_ChangeDigitalMode,              NULL }, // Digital Mode Box: Switch Digi Mode
-		{ { 26,35,39,46 }, UiAction_ChangeDynamicTuning,            NULL }, // Step Box: Dynamic Tuning Toggle
+		{ { 19,60,48,60 }, UiAction_ChangeLowerMeterUp },  // Lower Meter: Meter Toggle
+		{ { 10,28,27,31 }, UiAction_ToggleWaterfallScopeDisplay }, // Spectrum Bar Left Part: WaterfallScope Toggle
+		{ { 29,33,26,32 }, UiAction_ChangeSpectrumZoomLevelDown }, // Spectrum Bar Middle Part: Decrease Zoom Level
+		{ { 52,60,26,32 }, UiAction_ChangeSpectrumZoomLevelUp }, // Spectrum Bar Right Part: Increase Zoom Level
+		{ { 43,60,00,04 }, UiAction_ChangeFrequencyToNextKhz }, // Tune button:Set last 3 digits to zero
+		{ { 16,24,40,44 }, UiAction_ChangeDemodMode }, // Demod Mode Box: mode switch
+		{ { 16,24,45,48 }, UiAction_ChangePowerLevel }, // Power Box: TX Power Increase
+		{ { 10,16,44,50 }, UiAction_ChangeAudioSource }, // Audio In Box: Switch Source
+		{ { 48,52,35,37 }, UiAction_ChangeBandDownOrUp }, // Left Part Band Display: Band down
+		{ { 53,60,35,37 }, UiAction_ChangeBandUpOrDown }, // Right Part Band Display: Band up
+		{ { 00,07,21,30 }, Codec_RestartI2S }, // DSP Box: Restart I2S
+		{ { 8,60,11,19  }, UiAction_ChangeFrequencyByTouch }, // Scope Draw Area: Tune to Touch
+		{ { 0,7,10,13   }, UiAction_ChangeDigitalMode }, // Digital Mode Box: Switch Digi Mode
+		{ { 26,35,39,46 }, UiAction_ChangeDynamicTuning }, // Step Box: Dynamic Tuning Toggle
 };
 
 // this is the map for menu mode, right now only used for debugging/experimental purposes
@@ -6443,46 +6410,28 @@ static const touchaction_list_descr_t touch_regions[] =
 		{ touchactions_menu, sizeof(touchactions_menu)/sizeof(*touchactions_menu) },
 };
 
-static void UiDriver_HandleTouchScreen(bool is_long_press)
+static void UiDriver_HandleTouchScreen()
 {
 	if(is_touchscreen_pressed())
 	{
 		if (ts.show_debug_info)					// show coordinates for coding purposes
 		{
-
-#ifdef USE_HIRES_TOUCH
-
-			UiLcdHy28_DrawColorPoint(ts.tp->hr_x,ts.tp->hr_y,White);
-
-			char text[14];
-			snprintf(text,14,"%04d%s%04d%s",ts.tp->hr_x," : ",ts.tp->hr_y,"  ");
-#else
 			char text[10];
 			snprintf(text,10,"%02d%s%02d%s",ts.tp->x," : ",ts.tp->y,"  ");
-#endif
 			UiLcdHy28_PrintText(0,POS_LOADANDDEBUG_Y,text,White,Black,0);
 		}
 
 		uint32_t touchaction_idx = ts.menu_mode == true?1:0;
 
-		UiDriver_ProcessTouchActions(&touch_regions[touchaction_idx], is_long_press);
+		UiDriver_ProcessTouchActions(&touch_regions[touchaction_idx]);
 
 		ts.tp->state = TP_DATASETS_PROCESSED;							// set statemachine to data fetched
 	}
 }
 
-static void UiDriver_HandleTouchScreenShortPress(bool is_long_press)
-{
-    UiDriver_HandleTouchScreen(false);
-}
-static void UiDriver_HandleTouchScreenLongPress(bool is_long_press)
-{
-    UiDriver_HandleTouchScreen(true);
-}
-
 static const keyaction_descr_t keyactions_normal[] =
 {
-		{ TOUCHSCREEN_ACTIVE, 	UiDriver_HandleTouchScreenShortPress,       UiDriver_HandleTouchScreenLongPress },
+		{ TOUCHSCREEN_ACTIVE, 	UiDriver_HandleTouchScreen },
 		{ BUTTON_F1_PRESSED, 	UiAction_ToggleMenuMode, 					UiAction_SaveConfigurationToMemory },
 		{ BUTTON_F2_PRESSED, 	UiAction_ChangeLowerMeterDownOrSnap, 		UiAction_ChangeLowerMeterUp },
 		{ BUTTON_F3_PRESSED, 	UiAction_ToggleSplitModeOrToggleMemMode, 	UiAction_ToggleVfoMem },
@@ -6667,8 +6616,8 @@ void UiDriver_MainHandler()
 	}
 #endif // USE_FREEDV
 
-#ifdef USE_ALTERNATE_NR
-	if ((ts.new_nb == true || (ts.dsp_active & DSP_NR_ENABLE)) && (ads.decimation_rate == 4))
+#ifdef alternate_NR
+	if ((ts.new_nb == true) && (ads.decimation_rate == 4))
 	{
 
 		alternateNR_handle();
@@ -6771,7 +6720,7 @@ void UiDriver_MainHandler()
 
 					char str[20];
 					snprintf(str,20,"%2u:%02u:%02u",sTime.Hours,sTime.Minutes,sTime.Seconds);
-					UiLcdHy28_PrintText(POS_RTC_X,POS_RTC_Y,str,White,Black,0);
+					UiLcdHy28_PrintText(0,POS_RTC,str,White,Black,0);
 				}
 			}
 			break;
